@@ -1,5 +1,8 @@
 from datetime import datetime
 from pymongo import MongoClient
+from sqlalchemy import create_engine
+import pandas as pd
+import unidecode
 import logging
 
 
@@ -34,20 +37,39 @@ def store_historical_data(data: dict, collection_name: str, date: datetime):
     )
 
 
-def try_transformation():
+def get_collection_data(collection_name: str) -> pd.DataFrame:
     db = get_database()
-    collection = db["estaciones-terrestres"]
-    res = collection.aggregate(
-        [
-            {"$unwind": "$ListaEESSPrecio"},
-            {
-                "$replaceRoot": {
-                    "newRoot": {"$mergeObjects": ["$$ROOT", "$ListaEESSPrecio"]}
-                }
-            },
-            {"$project": {"ListaEESSPrecio": 0, "_id": 0}},
-        ]
-    )
-    for doc in res:
-        print(doc)
-        return
+    collection = db[collection_name]
+    return pd.DataFrame(list(collection.find([], {'_id': False})))
+
+
+def sanitize_name(name: str) -> str:
+    result = name.replace('-', '_')
+    result = result.replace(' ', '_')
+    result = result.replace('%', 'porcentaje')
+    # remove accents
+    result = unidecode.unidecode(result)
+    return result
+
+
+def load_staging(data: pd.DataFrame, collection_name, is_lookup):
+    engine = create_engine('postgresql://postgres:password@localhost:5432/data-oil', echo=True)
+    insert_type = "replace" if is_lookup else "append"
+    result = data.to_sql(name=sanitize_name(collection_name), con=engine, schema='data_oil_stg', if_exists=insert_type, index=False)
+
+    # db = get_database()
+    # collection = db["estaciones-terrestres"]
+    # res = collection.aggregate(
+    #     [
+    #         {"$unwind": "$ListaEESSPrecio"},
+    #         {
+    #             "$replaceRoot": {
+    #                 "newRoot": {"$mergeObjects": ["$$ROOT", "$ListaEESSPrecio"]}
+    #             }
+    #         },
+    #         {"$project": {"ListaEESSPrecio": 0, "_id": 0}},
+    #     ]
+    # )
+    # for doc in res:
+    #     print(doc)
+    #     return

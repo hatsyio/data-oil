@@ -1,7 +1,7 @@
 import requests
 import yaml
 from yaml.loader import FullLoader
-from src.database import store_historical_data, store_lookup_data, try_transformation
+from src.database import store_historical_data, store_lookup_data, load_staging, get_collection_data
 from datetime import date, datetime, timedelta
 import logging
 
@@ -59,4 +59,10 @@ def main():
     #print(start_date)
     #load_historical_data(start_date)
 
-    try_transformation()
+    load_stg()
+
+def load_stg():
+    conf = load_conf()["lookups"]
+    for collection_name in conf:
+        data = get_collection_data(collection_name)
+        load_staging(data, collection_name, True)
